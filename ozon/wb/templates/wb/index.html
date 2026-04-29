@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>СкладОзон — Учёт товаров на складе</title>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.176.0",
+    "three/examples/jsm/environments/RoomEnvironment.js": "https://esm.sh/three@0.176.0/examples/jsm/environments/RoomEnvironment.js"
+  }
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090b;--surface:#18181b;--surface2:#27272a;
+  --text:#fafafa;--text2:#a1a1aa;--text3:#71717a;
+  --accent:#10b981;--accent2:#34d399;--accent-dim:rgba(16,185,129,.12);
+  --danger:#ef4444;--danger-dim:rgba(239,68,68,.1);
+  --border:rgba(255,255,255,.06);--border2:rgba(255,255,255,.1);
+  --r:16px;--r-sm:10px;--r-lg:24px;
+  --ease-out:cubic-bezier(0.23,1,0.32,1);
+  --ease-in-out:cubic-bezier(0.77,0,0.175,1);
+  --font:'Inter',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-weight:400;overflow-x:hidden;-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.6}
+a{color:inherit;text-decoration:none}
+
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:3px}
+
+.sk{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);background-size:200% 100%;animation:skl 1.4s infinite;border-radius:var(--r-sm)}
+@keyframes skl{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* ── NAV ── */
+.nav{position:fixed;top:0;left:0;width:100%;z-index:200;padding:0 40px;height:64px;display:flex;align-items:center;justify-content:space-between;transition:background .3s var(--ease-out),border-color .3s var(--ease-out)}
+.nav.scrolled{background:rgba(9,9,11,.88);backdrop-filter:blur(24px) saturate(1.5);border-bottom:1px solid var(--border)}
+.logo{font-size:18px;font-weight:700;letter-spacing:-.03em;display:flex;align-items:center;gap:10px;cursor:pointer}
+.logo-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-mark svg{width:16px;height:16px;stroke:#09090b;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.logo span{color:var(--accent)}
+.nav-links{display:flex;gap:4px}
+.nav-link{font-size:13px;font-weight:500;color:var(--text3);padding:7px 14px;border-radius:8px;transition:color .2s,background .2s;cursor:pointer}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.nav-cta{font-size:13px;font-weight:600;background:var(--accent);color:#09090b;border-radius:10px;padding:8px 20px;transition:opacity .2s,transform .15s var(--ease-out),box-shadow .15s var(--ease-out);cursor:pointer}
+.nav-cta:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 28px rgba(16,185,129,.28)}
+.nav-cta:active{transform:scale(.97)}
+
+/* ── HERO ── */
+.hero{position:relative;width:100%;height:100dvh;overflow:hidden;display:flex;align-items:center;justify-content:center}
+
+/* Ballpit fills the whole hero */
+.ballpit-wrap{position:absolute;inset:0;z-index:0}
+.ballpit-wrap canvas{display:block;width:100%!important;height:100%!important}
+
+/* layered overlay for readability */
+.hero-overlay{position:absolute;inset:0;z-index:1;
+  background:
+    radial-gradient(ellipse 80% 80% at 50% 50%, rgba(9,9,11,.5) 0%, rgba(9,9,11,.78) 100%);
+}
+.hero-vignette{position:absolute;inset:0;z-index:1;
+  box-shadow:inset 0 0 200px 60px rgba(9,9,11,.95);
+}
+
+/* content sits above canvas */
+.hero-inner{position:relative;z-index:2;width:100%;max-width:1280px;padding:0 40px;display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center}
+
+.hero-content{opacity:0;animation:rise .75s var(--ease-out) .2s forwards}
+@keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+
+.hero-badge{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:600;letter-spacing:.01em;color:var(--accent);margin-bottom:28px;padding:5px 14px 5px 8px;border-radius:999px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);backdrop-filter:blur(8px)}
+.hero-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse-dot 2s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse-dot{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:1;transform:scale(1.5)}}
+
+.hero-title{font-size:clamp(40px,5.2vw,72px);font-weight:700;line-height:.93;letter-spacing:-.05em;margin-bottom:22px}
+.hero-title .accent{color:var(--accent)}
+
+.hero-sub{font-size:16px;color:var(--text2);max-width:440px;line-height:1.75;margin-bottom:36px;letter-spacing:-.01em}
+
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:36px}
+
+.btn-primary{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#09090b;font-size:14px;font-weight:600;font-family:var(--font);letter-spacing:-.01em;border-radius:10px;padding:11px 26px;transition:opacity .2s,transform .15s var(--ease-out),box-shadow .15s var(--ease-out);border:none;cursor:pointer}
+.btn-primary:hover{opacity:.92;transform:translateY(-2px);box-shadow:0 16px 40px rgba(16,185,129,.32)}
+.btn-primary:active{transform:scale(.97)}
+.btn-primary svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+
+.btn-secondary{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);color:var(--text);font-size:14px;font-weight:500;font-family:var(--font);letter-spacing:-.01em;border-radius:10px;padding:11px 26px;border:1px solid rgba(255,255,255,.1);transition:background .2s,border-color .2s;cursor:pointer;backdrop-filter:blur(8px)}
+.btn-secondary:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.18)}
+
+.hero-features{display:flex;flex-direction:column;gap:9px}
+.hero-feat{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text3);letter-spacing:-.005em}
+.hero-feat-check{width:18px;height:18px;border-radius:5px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hero-feat-check svg{width:10px;height:10px;stroke:var(--accent);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+
+/* hero right panel */
+.hero-visual{opacity:0;animation:rise .85s var(--ease-out) .4s forwards}
+.hero-card{background:rgba(24,24,27,.82);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:20px;position:relative;overflow:hidden;backdrop-filter:blur(20px) saturate(1.3)}
+.hero-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 10%,var(--accent) 50%,transparent 90%);opacity:.6}
+
+.hero-card-label{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)}
+
+.hero-kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hero-kpi{background:rgba(39,39,42,.7);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:3px;border:1px solid var(--border)}
+.hero-kpi-num{font-size:30px;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--text);font-variant-numeric:tabular-nums}
+.hero-kpi-lbl{font-size:11px;color:var(--text3);font-weight:500;margin-top:2px}
+
+.hero-rows{display:flex;flex-direction:column;gap:6px}
+.hero-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:rgba(39,39,42,.7);border-radius:10px;border:1px solid var(--border)}
+.hero-row-l{display:flex;align-items:center;gap:9px}
+.hero-row-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.hero-row-dot.ok{background:var(--accent)}
+.hero-row-dot.ex{background:#ef4444}
+.hero-row-name{font-size:12px;font-weight:500;font-family:var(--mono);color:var(--text2)}
+.hero-row-tag{font-size:10.5px;font-weight:600;padding:2px 9px;border-radius:5px}
+.hero-row-tag.ok{background:rgba(16,185,129,.12);color:var(--accent2)}
+.hero-row-tag.ex{background:rgba(239,68,68,.1);color:#f87171}
+
+/* scroll hint */
+.hero-scroll{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:3;display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0;animation:rise .5s var(--ease-out) 1.1s forwards}
+.scroll-mouse{width:20px;height:32px;border:1.5px solid rgba(255,255,255,.18);border-radius:10px;display:flex;justify-content:center;padding-top:5px}
+.scroll-wheel{width:3px;height:5px;border-radius:2px;background:var(--accent);animation:scroll-drop 1.8s ease-in-out infinite}
+@keyframes scroll-drop{0%{opacity:1;transform:translateY(0)}65%{opacity:0;transform:translateY(10px)}100%{opacity:0}}
+.scroll-label{font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--text3)}
+
+/* ── STATS ── */
+.stats-bar{border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:grid;grid-template-columns:repeat(4,1fr);opacity:0;animation:rise .6s var(--ease-out) .15s forwards}
+.stat-item{padding:36px 40px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:6px;transition:background .2s}
+.stat-item:last-child{border-right:none}
+.stat-item:hover{background:rgba(255,255,255,.018)}
+.stat-num{font-size:clamp(34px,4.5vw,52px);font-weight:700;letter-spacing:-.05em;line-height:1;font-variant-numeric:tabular-nums}
+.stat-label{font-size:12.5px;color:var(--text3);font-weight:500;letter-spacing:-.005em}
+
+/* ── SECTIONS ── */
+.section{padding:0 40px 80px}
+.sec-header{display:flex;align-items:flex-end;justify-content:space-between;padding:64px 0 32px;gap:16px}
+.sec-title{font-size:clamp(26px,3.2vw,40px);font-weight:700;letter-spacing:-.04em;line-height:1.05}
+.sec-title .accent{color:var(--accent)}
+.sec-subtitle{font-size:13px;color:var(--text3);font-weight:500;display:flex;align-items:center;gap:8px}
+.sec-subtitle::before{content:'';width:16px;height:1px;background:var(--text3);flex-shrink:0}
+
+/* ── MANAGEMENT GRID ── */
+.mgmt-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;border-radius:var(--r-lg);overflow:hidden}
+.mgmt-card{background:var(--surface);padding:28px;display:flex;flex-direction:column;gap:20px;transition:background .2s;cursor:pointer;position:relative;text-decoration:none}
+.mgmt-card:hover{background:var(--surface2)}
+.mgmt-card::after{content:'';position:absolute;bottom:0;left:28px;right:28px;height:1px;background:transparent;transition:background .2s}
+.mgmt-card:hover::after{background:var(--accent)}
+.mgmt-icon{width:44px;height:44px;border-radius:12px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center}
+.mgmt-icon svg{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.mgmt-name{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-.015em}
+.mgmt-count{font-size:30px;font-weight:700;letter-spacing:-.04em;color:var(--text);line-height:1;font-variant-numeric:tabular-nums}
+
+/* ── ROOMS ── */
+.rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:2px;border-radius:var(--r-lg);overflow:hidden}
+.room-card{background:var(--surface);padding:28px;min-height:200px;display:flex;flex-direction:column;justify-content:space-between;gap:16px;transition:background .2s}
+.room-card:hover{background:var(--surface2)}
+.room-top{display:flex;flex-direction:column;gap:4px}
+.room-label{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)}
+.room-name{font-size:19px;font-weight:600;letter-spacing:-.025em}
+.room-bottom{display:flex;flex-direction:column;gap:12px}
+.room-vol{display:flex;align-items:baseline;gap:4px}
+.room-vol-num{font-size:36px;font-weight:700;letter-spacing:-.04em;color:var(--accent);line-height:1;font-variant-numeric:tabular-nums}
+.room-vol-unit{font-size:13px;color:var(--text3);font-weight:500}
+.rack-pills{display:flex;flex-wrap:wrap;gap:6px}
+.rack-pill{font-size:11px;font-weight:500;font-family:var(--mono);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:3px 10px;transition:border-color .2s,background .2s;cursor:default}
+@media(hover:hover)and(pointer:fine){.rack-pill:hover{border-color:rgba(16,185,129,.3);background:var(--accent-dim)}}
+.no-data{font-size:12px;color:var(--text3);font-style:italic}
+
+/* ── RACKS ── */
+.racks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:2px;border-radius:var(--r-lg);overflow:hidden}
+.rack-card{background:var(--surface);padding:28px;display:flex;flex-direction:column;gap:20px;transition:background .2s}
+.rack-card:hover{background:var(--surface2)}
+.rack-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.rack-id-badge{font-size:12px;font-weight:600;font-family:var(--mono);background:var(--accent-dim);color:var(--accent);padding:5px 12px;border-radius:7px;letter-spacing:.02em}
+.rack-room-tag{font-size:11px;font-weight:500;color:var(--text3);padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:rgba(255,255,255,.02)}
+.rack-specs{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.rack-spec{display:flex;flex-direction:column;gap:2px}
+.rack-spec-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)}
+.rack-spec-value{font-size:14.5px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.rack-spec-value .unit{font-weight:400;color:var(--text3);margin-left:2px}
+.rack-fill-bar{height:3px;border-radius:2px;background:var(--surface2);overflow:hidden}
+.rack-fill-inner{height:100%;border-radius:2px;background:var(--accent);transition:width .5s var(--ease-out)}
+.rack-fill-info{display:flex;justify-content:space-between;align-items:center}
+.rack-fill-text{font-size:11px;color:var(--text3);font-weight:500}
+.rack-fill-pct{font-size:11px;font-weight:600;font-family:var(--mono);color:var(--accent)}
+
+/* ── CLIENTS ── */
+.clients-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px;border-radius:var(--r-lg);overflow:hidden}
+.client-card{background:var(--surface);padding:24px;display:flex;flex-direction:column;gap:14px;transition:background .2s}
+.client-card:hover{background:var(--surface2)}
+.client-top{display:flex;align-items:center;gap:14px}
+.client-av{width:42px;height:42px;border-radius:11px;background:var(--accent-dim);color:var(--accent);font-size:14px;font-weight:700;letter-spacing:-.03em;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.client-info{flex:1;min-width:0}
+.client-name{font-size:14px;font-weight:600;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.client-count{font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px;margin-top:2px}
+.client-count::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.client-bank{font-size:12px;color:var(--text3);line-height:1.55;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+/* ── TABLE ── */
+.tbl-container{border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
+.tbl-top{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--border)}
+.tbl-label{font-size:13px;font-weight:600;color:var(--text2);letter-spacing:-.015em}
+.tbl-btn{font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-dim);border-radius:8px;padding:7px 15px;transition:background .2s,transform .15s var(--ease-out);display:inline-flex;align-items:center;gap:6px;cursor:pointer;letter-spacing:-.01em}
+.tbl-btn:hover{background:rgba(16,185,129,.18)}
+.tbl-btn:active{transform:scale(.97)}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:11px 20px;font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);background:rgba(255,255,255,.012)}
+td{padding:14px 20px;font-size:13px;color:var(--text2);border-bottom:1px solid rgba(255,255,255,.028);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.018);color:var(--text)}
+.td-contract{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--accent)}
+.td-rack{font-size:12px;font-family:var(--mono);font-weight:500;background:var(--accent-dim);color:var(--accent);border-radius:5px;padding:2px 9px;display:inline-block}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 11px;border-radius:999px}
+.badge-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.badge-ok{background:rgba(16,185,129,.1);color:var(--accent2);border:1px solid rgba(16,185,129,.15)}
+.badge-ok .badge-dot{background:var(--accent2)}
+.badge-ex{background:var(--danger-dim);color:#f87171;border:1px solid rgba(239,68,68,.15)}
+.badge-ex .badge-dot{background:#f87171}
+
+/* ── FOOTER ── */
+.footer{border-top:1px solid var(--border);padding:48px 40px}
+.footer-inner{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:40px;margin-bottom:40px}
+.f-brand{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:700;letter-spacing:-.03em;margin-bottom:12px}
+.f-brand span{color:var(--accent)}
+.f-tagline{font-size:13px;color:var(--text3);line-height:1.7;max-width:220px}
+.f-col-title{font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:16px}
+.f-col a{display:block;font-size:13px;color:var(--text3);margin-bottom:10px;transition:color .2s,transform .2s var(--ease-out)}
+.f-col a:hover{color:var(--text);transform:translateX(3px)}
+.f-bottom{border-top:1px solid var(--border);padding-top:20px;display:flex;justify-content:space-between;align-items:center}
+.f-copy{font-size:12px;color:var(--text3)}
+.f-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3)}
+.f-status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulse-dot 2s ease-in-out infinite}
+
+/* ── EMPTY ── */
+.empty-state{text-align:center;padding:64px 24px;color:var(--text3)}
+.empty-icon{width:56px;height:56px;border-radius:16px;background:var(--surface2);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px}
+.empty-icon svg{width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.empty-state p{margin-bottom:8px}
+.empty-state a{color:var(--accent);font-weight:600}
+
+/* ── FADE ── */
+.fade-in{opacity:0;transform:translateY(18px);transition:opacity .5s var(--ease-out),transform .5s var(--ease-out)}
+.fade-in.visible{opacity:1;transform:translateY(0)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:1200px){.hero-inner{gap:48px}}
+@media(max-width:1024px){
+  .mgmt-grid{grid-template-columns:repeat(2,1fr)}
+  .racks-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+  .hero-inner{grid-template-columns:1fr}
+  .hero-visual{display:none}
+}
+@media(max-width:900px){
+  .nav{padding:0 20px}.nav-links{display:none}
+  .hero-inner{padding:0 20px}
+  .stats-bar{grid-template-columns:repeat(2,1fr)}
+  .stat-item{padding:24px 20px}.stat-item:nth-child(2n){border-right:none}
+  .section{padding:0 20px 60px}.sec-header{padding:48px 0 24px;flex-direction:column;align-items:flex-start}
+  .footer-inner{grid-template-columns:1fr 1fr;gap:28px}.footer{padding:36px 20px}
+  table th:nth-child(n+5),table td:nth-child(n+5){display:none}
+}
+@media(max-width:600px){
+  .mgmt-grid,.rooms-grid,.racks-grid,.clients-grid{grid-template-columns:1fr}
+  .hero-title{font-size:clamp(34px,10vw,52px)}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+import {
+  Vector3, MeshPhysicalMaterial, InstancedMesh, Clock,
+  AmbientLight, SphereGeometry, ShaderChunk, Scene, Color,
+  Object3D, SRGBColorSpace, MathUtils, PMREMGenerator,
+  Vector2, WebGLRenderer, PerspectiveCamera, PointLight,
+  ACESFilmicToneMapping, Plane, Raycaster
+} from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+
+const { useState, useEffect, useRef, Fragment: F } = React;
+const h = React.createElement;
+
+/* ── Three.js base ── */
+class ThreeBase {
+  #opts; canvas; camera; cameraFov; cameraMaxAspect; scene; renderer;
+  size={width:0,height:0,wWidth:0,wHeight:0,ratio:0,pixelRatio:0};
+  #visible=false;#animating=false;#clock=new Clock();#time={elapsed:0,delta:0};
+  #rafId;#resizeTimer;#resizeObs;#intersObs;
+  onBeforeRender=()=>{};onAfterRender=()=>{};onAfterResize=()=>{};
+  isDisposed=false;
+
+  constructor(opts){
+    this.#opts={...opts};
+    this.camera=new PerspectiveCamera();this.cameraFov=this.camera.fov;
+    this.scene=new Scene();
+    const canvas=opts.canvas||document.getElementById(opts.id);
+    this.canvas=canvas; canvas.style.display='block';
+    this.renderer=new WebGLRenderer({canvas,powerPreference:'high-performance',antialias:true,alpha:true,...(opts.rendererOptions||{})});
+    this.renderer.outputColorSpace=SRGBColorSpace;
+    this.#setup();this.resize();
+  }
+
+  #setup(){
+    window.addEventListener('resize',this.#onResize.bind(this));
+    if(this.#opts.size==='parent'&&this.canvas.parentNode){
+      this.#resizeObs=new ResizeObserver(this.#onResize.bind(this));
+      this.#resizeObs.observe(this.canvas.parentNode);
+    }
+    this.#intersObs=new IntersectionObserver(e=>{
+      this.#visible=e[0].isIntersecting;
+      this.#visible?this.#start():this.#stop();
+    });
+    this.#intersObs.observe(this.canvas);
+    document.addEventListener('visibilitychange',()=>{
+      if(this.#visible) document.hidden?this.#stop():this.#start();
+    });
+  }
+
+  #onResize(){clearTimeout(this.#resizeTimer);this.#resizeTimer=setTimeout(()=>this.resize(),100);}
+
+  resize(){
+    let w,ht;
+    if(this.#opts.size==='parent'&&this.canvas.parentNode){w=this.canvas.parentNode.offsetWidth;ht=this.canvas.parentNode.offsetHeight;}
+    else{w=window.innerWidth;ht=window.innerHeight;}
+    this.size.width=w;this.size.height=ht;this.size.ratio=w/ht;
+    this.camera.aspect=w/ht;
+    if(this.cameraMaxAspect&&this.camera.aspect>this.cameraMaxAspect){
+      const t=Math.tan(MathUtils.degToRad(this.cameraFov/2))/(this.camera.aspect/this.cameraMaxAspect);
+      this.camera.fov=2*MathUtils.radToDeg(Math.atan(t));
+    } else {this.camera.fov=this.cameraFov;}
+    this.camera.updateProjectionMatrix();
+    const fov=this.camera.fov*Math.PI/180;
+    this.size.wHeight=2*Math.tan(fov/2)*this.camera.position.length();
+    this.size.wWidth=this.size.wHeight*this.camera.aspect;
+    this.renderer.setSize(w,ht);
+    const pr=Math.min(window.devicePixelRatio,2);
+    this.renderer.setPixelRatio(pr);this.size.pixelRatio=pr;
+    this.onAfterResize(this.size);
+  }
+
+  #start(){
+    if(this.#animating)return;this.#animating=true;this.#clock.start();
+    const loop=()=>{
+      this.#rafId=requestAnimationFrame(loop);
+      this.#time.delta=this.#clock.getDelta();this.#time.elapsed+=this.#time.delta;
+      this.onBeforeRender(this.#time);
+      this.renderer.render(this.scene,this.camera);
+      this.onAfterRender(this.#time);
+    };loop();
+  }
+  #stop(){if(!this.#animating)return;cancelAnimationFrame(this.#rafId);this.#animating=false;this.#clock.stop();}
+
+  clear(){
+    this.scene.traverse(obj=>{
+      if(obj.isMesh){
+        Object.values(obj.material).forEach(v=>v?.dispose?.());
+        obj.material.dispose();obj.geometry.dispose();
+      }
+    });this.scene.clear();
+  }
+  dispose(){
+    this.#stop();this.#resizeObs?.disconnect();this.#intersObs?.disconnect();
+    this.clear();this.renderer.dispose();this.renderer.forceContextLoss();this.isDisposed=true;
+  }
+}
+
+/* ── Pointer tracker ── */
+const _map=new Map(),_cur=new Vector2();let _listening=false;
+function createPointer(opts){
+  const t={position:new Vector2(),nPosition:new Vector2(),hover:false,touching:false,
+    onEnter(){},onMove(){},onLeave(){},...opts};
+  _map.set(opts.domElement,t);
+  if(!_listening){
+    document.body.addEventListener('pointermove',_pmove);
+    document.body.addEventListener('pointerleave',_pleave);
+    document.body.addEventListener('touchstart',_tstart,{passive:false});
+    document.body.addEventListener('touchmove',_tmove,{passive:false});
+    document.body.addEventListener('touchend',_tend,{passive:false});
+    _listening=true;
+  }
+  t.dispose=()=>{
+    _map.delete(opts.domElement);
+    if(_map.size===0){
+      document.body.removeEventListener('pointermove',_pmove);
+      document.body.removeEventListener('pointerleave',_pleave);
+      document.body.removeEventListener('touchstart',_tstart);
+      document.body.removeEventListener('touchmove',_tmove);
+      document.body.removeEventListener('touchend',_tend);
+      _listening=false;
+    }
+  };
+  return t;
+}
+function _setPos(t,r){t.position.set(_cur.x-r.left,_cur.y-r.top);t.nPosition.set((_cur.x-r.left)/r.width*2-1,-(_cur.y-r.top)/r.height*2+1);}
+function _inRect(r){return _cur.x>=r.left&&_cur.x<=r.left+r.width&&_cur.y>=r.top&&_cur.y<=r.top+r.height;}
+function _pmove(e){_cur.set(e.clientX,e.clientY);for(const[el,t]of _map){const r=el.getBoundingClientRect();_setPos(t,r);if(_inRect(r)){if(!t.hover){t.hover=true;t.onEnter(t);}t.onMove(t);}else if(t.hover&&!t.touching){t.hover=false;t.onLeave(t);}}}
+function _pleave(){for(const t of _map.values())if(t.hover){t.hover=false;t.onLeave(t);}}
+function _tstart(e){if(!e.touches.length)return;e.preventDefault();_cur.set(e.touches[0].clientX,e.touches[0].clientY);for(const[el,t]of _map){const r=el.getBoundingClientRect();if(_inRect(r)){t.touching=true;_setPos(t,r);if(!t.hover){t.hover=true;t.onEnter(t);}t.onMove(t);}}}
+function _tmove(e){if(!e.touches.length)return;e.preventDefault();_cur.set(e.touches[0].clientX,e.touches[0].clientY);for(const[el,t]of _map){const r=el.getBoundingClientRect();_setPos(t,r);if(_inRect(r)){if(!t.hover){t.hover=true;t.touching=true;t.onEnter(t);}t.onMove(t);}else if(t.hover&&t.touching)t.onMove(t);}}
+function _tend(){for(const t of _map.values())if(t.touching){t.touching=false;if(t.hover){t.hover=false;t.onLeave(t);}}}
+
+/* ── Physics ── */
+const {randFloat:rf,randFloatSpread:rfs}=MathUtils;
+const va=new Vector3(),vb=new Vector3(),vc=new Vector3(),vd=new Vector3(),
+      ve=new Vector3(),vf=new Vector3(),vg=new Vector3(),vh=new Vector3(),
+      vi=new Vector3(),vj=new Vector3();
+
+class BallPhysics{
+  constructor(c){
+    this.config=c;
+    this.positionData=new Float32Array(3*c.count).fill(0);
+    this.velocityData=new Float32Array(3*c.count).fill(0);
+    this.sizeData=new Float32Array(c.count).fill(1);
+    this.center=new Vector3();
+    this.#init();this.setSizes();
+  }
+  #init(){const{config:c,positionData:p}=this;this.center.toArray(p,0);for(let i=1;i<c.count;i++){const b=3*i;p[b]=rfs(2*c.maxX);p[b+1]=rfs(2*c.maxY);p[b+2]=rfs(2*c.maxZ);}}
+  setSizes(){const{config:c,sizeData:s}=this;s[0]=c.size0;for(let i=1;i<c.count;i++)s[i]=rf(c.minSize,c.maxSize);}
+  update(e){
+    const{config:c,center,positionData:p,sizeData:sz,velocityData:v}=this;
+    let st=0;
+    if(c.controlSphere0){st=1;va.fromArray(p,0).lerp(center,0.1).toArray(p,0);vd.set(0,0,0).toArray(v,0);}
+    for(let i=st;i<c.count;i++){const b=3*i;vb.fromArray(p,b);ve.fromArray(v,b);ve.y-=e.delta*c.gravity*sz[i];ve.multiplyScalar(c.friction).clampLength(0,c.maxVelocity);vb.add(ve);vb.toArray(p,b);ve.toArray(v,b);}
+    for(let i=st;i<c.count;i++){
+      const b=3*i;vb.fromArray(p,b);ve.fromArray(v,b);const ri=sz[i];
+      for(let j=i+1;j<c.count;j++){
+        const ob=3*j;vc.fromArray(p,ob);vf.fromArray(v,ob);const rj=sz[j];vg.copy(vc).sub(vb);
+        const dist=vg.length(),sum=ri+rj;
+        if(dist<sum){const ov=sum-dist;vh.copy(vg).normalize().multiplyScalar(0.5*ov);vi.copy(vh).multiplyScalar(Math.max(ve.length(),1));vj.copy(vh).multiplyScalar(Math.max(vf.length(),1));vb.sub(vh);ve.sub(vi);vb.toArray(p,b);ve.toArray(v,b);vc.add(vh);vf.add(vj);vc.toArray(p,ob);vf.toArray(v,ob);}
+      }
+      if(c.controlSphere0){va.fromArray(p,0);vg.copy(va).sub(vb);const dist=vg.length(),sum=ri+sz[0];if(dist<sum){const d=sum-dist;vh.copy(vg.normalize()).multiplyScalar(d);vi.copy(vh).multiplyScalar(Math.max(ve.length(),2));vb.sub(vh);ve.sub(vi);}}
+      if(Math.abs(vb.x)+ri>c.maxX){vb.x=Math.sign(vb.x)*(c.maxX-ri);ve.x=-ve.x*c.wallBounce;}
+      if(c.gravity===0){if(Math.abs(vb.y)+ri>c.maxY){vb.y=Math.sign(vb.y)*(c.maxY-ri);ve.y=-ve.y*c.wallBounce;}}
+      else if(vb.y-ri<-c.maxY){vb.y=-c.maxY+ri;ve.y=-ve.y*c.wallBounce;}
+      const mb=Math.max(c.maxZ,c.maxSize);
+      if(Math.abs(vb.z)+ri>mb){vb.z=Math.sign(vb.z)*(c.maxZ-ri);ve.z=-ve.z*c.wallBounce;}
+      vb.toArray(p,b);ve.toArray(v,b);
+    }
+  }
+}
+
+/* ── Subsurface material ── */
+class SubMat extends MeshPhysicalMaterial{
+  constructor(p){
+    super(p);
+    this.uniforms={thicknessDistortion:{value:.1},thicknessAmbient:{value:0},thicknessAttenuation:{value:.1},thicknessPower:{value:2},thicknessScale:{value:10}};
+    this.defines.USE_UV='';
+    this.onBeforeCompile=s=>{
+      Object.assign(s.uniforms,this.uniforms);
+      s.fragmentShader='uniform float thicknessPower,thicknessScale,thicknessDistortion,thicknessAmbient,thicknessAttenuation;\n'+s.fragmentShader;
+      s.fragmentShader=s.fragmentShader.replace('void main() {',`
+        void RE_Direct_Scattering(const in IncidentLight dL,const in vec2 uv,const in vec3 gP,const in vec3 gN,const in vec3 gV,const in vec3 gCN,inout ReflectedLight rL){
+          vec3 sH=normalize(dL.direction+(gN*thicknessDistortion));
+          float sD=pow(saturate(dot(gV,-sH)),thicknessPower)*thicknessScale;
+          #ifdef USE_COLOR
+            vec3 sI=(sD+thicknessAmbient)*vColor;
+          #else
+            vec3 sI=(sD+thicknessAmbient)*diffuse;
+          #endif
+          rL.directDiffuse+=sI*thicknessAttenuation*dL.color;
+        }
+        void main() {`);
+      const patched=ShaderChunk.lights_fragment_begin.replaceAll(
+        'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );',
+        'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );\nRE_Direct_Scattering(directLight,vUv,geometryPosition,geometryNormal,geometryViewDir,geometryClearcoatNormal,reflectedLight);'
+      );
+      s.fragmentShader=s.fragmentShader.replace('#include <lights_fragment_begin>',patched);
+    };
+  }
+}
+
+/* ── Ballpit instanced mesh ── */
+const BALL_DEFAULTS={
+  count:150,colors:[0x10b981,0x34d399,0x059669,0x6ee7b7,0x047857],
+  ambientColor:0xffffff,ambientIntensity:.7,lightIntensity:160,
+  materialParams:{metalness:.3,roughness:.4,clearcoat:1,clearcoatRoughness:.1},
+  minSize:.45,maxSize:1.05,size0:1.1,
+  gravity:.5,friction:.9975,wallBounce:.95,maxVelocity:.15,
+  maxX:5,maxY:5,maxZ:2,controlSphere0:false,followCursor:true
+};
+const dummy=new Object3D();
+
+class BallpitMesh extends InstancedMesh{
+  constructor(renderer,overrides={}){
+    const cfg={...BALL_DEFAULTS,...overrides};
+    const envTex=new PMREMGenerator(renderer).fromScene(new RoomEnvironment(),.04).texture;
+    const mat=new SubMat({envMap:envTex,...cfg.materialParams});
+    mat.envMapRotation.x=-Math.PI/2;
+    super(new SphereGeometry(),mat,cfg.count);
+    this.config=cfg;
+    this.physics=new BallPhysics(cfg);
+    this.ambientLight=new AmbientLight(cfg.ambientColor,cfg.ambientIntensity);
+    this.add(this.ambientLight);
+    this.light=new PointLight(0xffffff,cfg.lightIntensity);
+    this.add(this.light);
+    this._applyColors(cfg.colors);
+  }
+  _applyColors(colors){
+    if(!Array.isArray(colors)||colors.length<2)return;
+    const cols=colors.map(c=>new Color(c));
+    for(let i=0;i<this.count;i++){
+      const t=i/(this.count-1),idx=Math.min(Math.floor(t*(cols.length-1)),cols.length-2);
+      const a=cols[idx],b=cols[idx+1],al=t*(cols.length-1)-idx;
+      const out=new Color(a.r+al*(b.r-a.r),a.g+al*(b.g-a.g),a.b+al*(b.b-a.b));
+      this.setColorAt(i,out);if(i===0)this.light.color.copy(out);
+    }
+    this.instanceColor.needsUpdate=true;
+  }
+  update(t){
+    this.physics.update(t);
+    for(let i=0;i<this.count;i++){
+      dummy.position.fromArray(this.physics.positionData,3*i);
+      dummy.scale.setScalar(i===0&&!this.config.followCursor?0:this.physics.sizeData[i]);
+      dummy.updateMatrix();this.setMatrixAt(i,dummy.matrix);
+      if(i===0)this.light.position.copy(dummy.position);
+    }
+    this.instanceMatrix.needsUpdate=true;
+  }
+}
+
+/* ── createBallpit factory ── */
+function createBallpit(canvas,opts={}){
+  const three=new ThreeBase({canvas,size:'parent'});
+  three.renderer.toneMapping=ACESFilmicToneMapping;
+  three.camera.position.set(0,0,20);
+  three.camera.lookAt(0,0,0);
+  three.cameraMaxAspect=1.5;three.resize();
+  let spheres;
+  function init(cfg){
+    if(spheres){three.clear();three.scene.remove(spheres);}
+    spheres=new BallpitMesh(three.renderer,cfg);
+    three.scene.add(spheres);
+  }
+  init(opts);
+  const ray=new Raycaster(),pl=new Plane(new Vector3(0,0,1),0),hit=new Vector3();
+  canvas.style.touchAction='none';
+  const ptr=createPointer({
+    domElement:canvas,
+    onMove(){ray.setFromCamera(ptr.nPosition,three.camera);three.camera.getWorldDirection(pl.normal);ray.ray.intersectPlane(pl,hit);spheres.physics.center.copy(hit);spheres.config.controlSphere0=true;},
+    onLeave(){spheres.config.controlSphere0=false;}
+  });
+  three.onBeforeRender=t=>spheres.update(t);
+  three.onAfterResize=s=>{spheres.config.maxX=s.wWidth/2;spheres.config.maxY=s.wHeight/2;};
+  return{three,get spheres(){return spheres;},dispose(){ptr.dispose();three.dispose();}};
+}
+
+/* ── Ballpit React component ── */
+function Ballpit({followCursor=true,...props}){
+  const ref=useRef(null),inst=useRef(null);
+  useEffect(()=>{
+    if(!ref.current)return;
+    inst.current=createBallpit(ref.current,{followCursor,...props});
+    return()=>inst.current?.dispose();
+  },[]);
+  return h('canvas',{ref,style:{display:'block',width:'100%',height:'100%'}});
+}
+
+/* ── shared icon helper ── */
+function Ico({paths,size=22,sw=1.8}){
+  const arr=Array.isArray(paths)?paths:[paths];
+  return h('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:sw,strokeLinecap:'round',strokeLinejoin:'round'},
+    arr.map((d,i)=>h('path',{key:i,d}))
+  );
+}
+const ic={
+  warehouse:['M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z','M9 22V12h6v10'],
+  rack:['M4 4h16v16H4z','M4 10h16','M4 16h16','M10 4v16'],
+  box:'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z',
+  users:['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2','M23 21v-2a4 4 0 00-3-3.87','M16 3.13a4 4 0 010 7.75'],
+  cart:['M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z','M3 6h18','M16 10a4 4 0 01-8 0'],
+  arrow:'M5 12h14M12 5l7 7-7 7',
+  plus:['M12 5v14','M5 12h14'],
+  layers:['M12 2L2 7l10 5 10-5-10-5z','M2 17l10 5 10-5','M2 12l10 5 10-5'],
+  warn:['M12 9v2m0 4h.01','M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z'],
+  check:'M20 6L9 17l-5-5',
+};
+
+function useFade(){
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!ref.current)return;
+    const el=ref.current;
+    const ob=new IntersectionObserver(e=>{if(e[0].isIntersecting){el.classList.add('visible');ob.unobserve(el);}},{threshold:.06});
+    ob.observe(el);
+    return()=>ob.disconnect();
+  },[]);
+  return ref;
+}
+
+/* ── NAV ── */
+function Nav(){
+  const [sc,setSc]=useState(false);
+  useEffect(()=>{
+    const fn=()=>setSc(window.scrollY>60);
+    window.addEventListener('scroll',fn,{passive:true});
+    return()=>window.removeEventListener('scroll',fn);
+  },[]);
+  return h('nav',{className:'nav'+(sc?' scrolled':'')},
+    h('div',{className:'logo'},
+      h('div',{className:'logo-mark'},h(Ico,{paths:ic.layers,size:16,sw:2.5})),
+      'Склад',h('span',null,'Озон')
+    ),
+    h('div',{className:'nav-links'},
+      h('a',{href:'#помещения',className:'nav-link'},'Помещения'),
+      h('a',{href:'#стеллажи',className:'nav-link'},'Стеллажи'),
+      h('a',{href:'#клиенты',className:'nav-link'},'Клиенты'),
+      h('a',{href:'#товары',className:'nav-link'},'Товары')
+    ),
+    h('a',{href:'/admin/',className:'nav-cta'},'Управление')
+  );
+}
+
+/* ── HERO ── */
+function Hero({stats,recentContracts}){
+  const s=stats||{rooms:0,racks:0,clients:0,items:0};
+  const feats=['Учёт товаров по стеллажам и позициям','Контроль сроков договоров','Статистика по клиентам и помещениям'];
+  const kpis=[{num:s.rooms,lbl:'Помещений'},{num:s.racks,lbl:'Стеллажей'},{num:s.clients,lbl:'Клиентов'},{num:s.items,lbl:'Товаров'}];
+
+  return h('section',{className:'hero'},
+    /* ── Ballpit canvas ── */
+    h('div',{className:'ballpit-wrap'},h(Ballpit,{count:150,gravity:.55,friction:.9975,wallBounce:.95,followCursor:true,colors:[0x10b981,0x34d399,0x059669,0x6ee7b7,0x047857],minSize:.4,maxSize:1.05})),
+    h('div',{className:'hero-overlay'}),
+    h('div',{className:'hero-vignette'}),
+
+    /* ── content ── */
+    h('div',{className:'hero-inner'},
+      /* left column */
+      h('div',{className:'hero-content'},
+        h('div',{className:'hero-badge'},
+          h('span',{className:'hero-badge-dot'}),
+          'Система учёта склада · v2.0'
+        ),
+        h('h1',{className:'hero-title'},
+          'Склад под ',h('br'),
+          h('span',{className:'accent'},'полным контролем')
+        ),
+        h('p',{className:'hero-sub'},
+          'Управляйте помещениями, стеллажами, клиентами и договорами. Всё в одной системе — в реальном времени.'
+        ),
+        h('div',{className:'hero-actions'},
+          h('a',{href:'/admin/',className:'btn-primary'},
+            'Войти в систему',
+            h(Ico,{paths:ic.arrow,size:15,sw:2.5})
+          ),
+          h('a',{href:'#помещения',className:'btn-secondary'},'Обзор склада')
+        ),
+        h('div',{className:'hero-features'},
+          feats.map((f,i)=>h('div',{key:i,className:'hero-feat'},
+            h('div',{className:'hero-feat-check'},h(Ico,{paths:ic.check,size:10,sw:3})),
+            h('span',null,f)
+          ))
+        )
+      ),
+
+      /* right column — glassmorphic KPI card */
+      h('div',{className:'hero-visual'},
+        h('div',{className:'hero-card'},
+          h('div',{className:'hero-card-label'},'Сводка склада'),
+          h('div',{className:'hero-kpi-grid'},
+            kpis.map((k,i)=>h('div',{key:i,className:'hero-kpi'},
+              h('div',{className:'hero-kpi-num'},k.num),
+              h('div',{className:'hero-kpi-lbl'},k.lbl)
+            ))
+          ),
+          h('div',{className:'hero-card-label',style:{marginTop:4}},'Последние договоры'),
+          h('div',{className:'hero-rows'},
+            (recentContracts&&recentContracts.length>0)
+              ? recentContracts.map((r,i)=>h('div',{key:i,className:'hero-row'},
+                  h('div',{className:'hero-row-l'},
+                    h('span',{className:'hero-row-dot '+(r.is_expired?'ex':'ok')}),
+                    h('span',{className:'hero-row-name'},r.contract)
+                  ),
+                  h('span',{className:'hero-row-tag '+(r.is_expired?'ex':'ok')},r.is_expired?'Истёк':'Активен')
+                ))
+              : h('div',{style:{padding:'12px',color:'var(--text3)',fontSize:12}},'Договоры не загружены')
+          )
+        )
+      )
+    ),
+
+    /* scroll hint */
+    h('div',{className:'hero-scroll'},
+      h('div',{className:'scroll-mouse'},h('div',{className:'scroll-wheel'})),
+      h('span',{className:'scroll-label'},'Прокрутите')
+    )
+  );
+}
+
+/* ── STATS ── */
+function StatsBar({data}){
+  const items=[
+    {num:data.stats.rooms,label:'Помещений'},
+    {num:data.stats.racks,label:'Стеллажей'},
+    {num:data.stats.clients,label:'Клиентов'},
+    {num:data.stats.items,label:'Товаров'},
+  ];
+  return h('section',{className:'stats-bar'},
+    items.map((s,i)=>h('div',{key:i,className:'stat-item'},
+      h('div',{className:'stat-num'},s.num),
+      h('div',{className:'stat-label'},s.label)
+    ))
+  );
+}
+function StatsBarSk(){
+  return h('section',{className:'stats-bar'},
+    [0,1,2,3].map(i=>h('div',{key:i,className:'stat-item'},
+      h('div',{className:'sk',style:{width:80,height:44,marginBottom:8}}),
+      h('div',{className:'sk',style:{width:100,height:14}})
+    ))
+  );
+}
+
+/* ── MANAGEMENT ── */
+function MgmtGrid({data}){
+  const ref=useFade();
+  const items=[
+    {icon:ic.warehouse,name:'Помещения',count:data.stats.rooms,href:'/admin/wb/room/'},
+    {icon:ic.rack,name:'Стеллажи',count:data.stats.racks,href:'/admin/wb/rack/'},
+    {icon:ic.users,name:'Клиенты',count:data.stats.clients,href:'/admin/wb/client/'},
+    {icon:ic.cart,name:'Товары',count:data.stats.items,href:'/admin/wb/item/'},
+  ];
+  return h('section',{ref,className:'section fade-in'},
+    h('div',{className:'sec-header'},
+      h('h2',{className:'sec-title'},'Управление ',h('span',{className:'accent'},'складом')),
+      h('span',{className:'sec-subtitle'},'Быстрый доступ')
+    ),
+    h('div',{className:'mgmt-grid'},
+      items.map((it,i)=>h('a',{key:i,href:it.href,className:'mgmt-card'},
+        h('div',{className:'mgmt-icon'},h(Ico,{paths:it.icon})),
+        h('div',{className:'mgmt-name'},it.name),
+        h('div',{className:'mgmt-count'},it.count)
+      ))
+    )
+  );
+}
+
+/* ── ROOMS ── */
+function Rooms({data}){
+  const ref=useFade();
+  return h('section',{ref,className:'section fade-in',id:'помещения'},
+    h('div',{className:'sec-header'},
+      h('h2',{className:'sec-title'},'Помещения ',h('span',{className:'accent'},'склада')),
+      h('span',{className:'sec-subtitle'},data.stats.rooms+' помещений')
+    ),
+    data.rooms.length===0
+      ? h('div',{className:'empty-state'},
+          h('div',{className:'empty-icon'},h(Ico,{paths:ic.warehouse,size:24})),
+          h('p',null,'Помещения не добавлены'),
+          h('a',{href:'/admin/wb/room/add/'},'Добавить помещение')
+        )
+      : h('div',{className:'rooms-grid'},
+          data.rooms.map(r=>h('div',{key:r.id,className:'room-card'},
+            h('div',{className:'room-top'},
+              h('div',{className:'room-label'},'Помещение'),
+              h('div',{className:'room-name'},r.name)
+            ),
+            h('div',{className:'room-bottom'},
+              h('div',{className:'room-vol'},
+                h('span',{className:'room-vol-num'},r.capacity),
+                h('span',{className:'room-vol-unit'},' м³')
+              ),
+              h('div',{className:'rack-pills'},
+                r.racks.length===0
+                  ? h('span',{className:'no-data'},'Нет стеллажей')
+                  : r.racks.map((rk,j)=>h('span',{key:j,className:'rack-pill'},rk.number+' · '+rk.slots_count+' мест'))
+              )
+            )
+          ))
+        )
+  );
+}
+
+/* ── RACKS ── */
+function Racks({data}){
+  const ref=useFade();
+  return h('section',{ref,className:'section fade-in',id:'стеллажи'},
+    h('div',{className:'sec-header'},
+      h('h2',{className:'sec-title'},'Стеллажи ',h('span',{className:'accent'},'хранения')),
+      h('span',{className:'sec-subtitle'},data.stats.racks+' стеллажей')
+    ),
+    data.racks.length===0
+      ? h('div',{className:'empty-state'},
+          h('div',{className:'empty-icon'},h(Ico,{paths:ic.rack,size:24})),
+          h('p',null,'Стеллажи не добавлены'),
+          h('a',{href:'/admin/wb/rack/add/'},'Добавить стеллаж')
+        )
+      : h('div',{className:'racks-grid'},
+          data.racks.map(rack=>{
+            const fillPct=rack.slots_count>0?Math.min(100,Math.round(rack.items_count/rack.slots_count*100)):0;
+            const slotVol=(rack.slot_height*rack.slot_width*rack.slot_length).toFixed(2);
+            return h('div',{key:rack.id,className:'rack-card'},
+              h('div',{className:'rack-header'},
+                h('span',{className:'rack-id-badge'},rack.number),
+                h('span',{className:'rack-room-tag'},rack.room)
+              ),
+              h('div',{className:'rack-specs'},
+                h('div',{className:'rack-spec'},h('div',{className:'rack-spec-label'},'Мест'),h('div',{className:'rack-spec-value'},rack.slots_count)),
+                h('div',{className:'rack-spec'},h('div',{className:'rack-spec-label'},'Макс. нагрузка'),h('div',{className:'rack-spec-value'},rack.max_load,h('span',{className:'unit'},' кг'))),
+                h('div',{className:'rack-spec'},h('div',{className:'rack-spec-label'},'Размер места'),h('div',{className:'rack-spec-value'},rack.slot_height+'×'+rack.slot_width+'×'+rack.slot_length,h('span',{className:'unit'},' м'))),
+                h('div',{className:'rack-spec'},h('div',{className:'rack-spec-label'},'Объём места'),h('div',{className:'rack-spec-value'},slotVol,h('span',{className:'unit'},' м³')))
+              ),
+              h('div',{style:{display:'flex',flexDirection:'column',gap:6}},
+                h('div',{className:'rack-fill-info'},
+                  h('span',{className:'rack-fill-text'},'Заполнено: '+rack.items_count+' из '+rack.slots_count),
+                  h('span',{className:'rack-fill-pct'},fillPct+'%')
+                ),
+                h('div',{className:'rack-fill-bar'},h('div',{className:'rack-fill-inner',style:{width:fillPct+'%'}}))
+              )
+            );
+          })
+        )
+  );
+}
+
+/* ── CLIENTS ── */
+function Clients({data}){
+  const ref=useFade();
+  return h('section',{ref,className:'section fade-in',id:'клиенты'},
+    h('div',{className:'sec-header'},
+      h('h2',{className:'sec-title'},'Клиенты ',h('span',{className:'accent'},'юрлица')),
+      h('span',{className:'sec-subtitle'},data.stats.clients+' клиентов')
+    ),
+    data.clients.length===0
+      ? h('div',{className:'empty-state'},
+          h('div',{className:'empty-icon'},h(Ico,{paths:ic.users,size:24})),
+          h('p',null,'Клиенты не добавлены'),
+          h('a',{href:'/admin/wb/client/add/'},'Добавить клиента')
+        )
+      : h('div',{className:'clients-grid'},
+          data.clients.map(c=>h('div',{key:c.id,className:'client-card'},
+            h('div',{className:'client-top'},
+              h('div',{className:'client-av'},c.initials),
+              h('div',{className:'client-info'},
+                h('div',{className:'client-name'},c.name),
+                h('div',{className:'client-count'},c.items_count+' товаров на хранении')
+              )
+            ),
+            h('div',{className:'client-bank'},c.bank_details)
+          ))
+        )
+  );
+}
+
+/* ── ITEMS TABLE ── */
+function ItemsTable({data}){
+  const ref=useFade();
+  return h('section',{ref,className:'section fade-in',id:'товары'},
+    h('div',{className:'sec-header'},
+      h('h2',{className:'sec-title'},'Реестр ',h('span',{className:'accent'},'товаров')),
+      h('a',{href:'/admin/wb/item/add/',className:'tbl-btn'},
+        h(Ico,{paths:ic.plus,size:13,sw:2.5}),
+        'Добавить'
+      )
+    ),
+    h('div',{className:'tbl-container'},
+      h('div',{className:'tbl-top'},
+        h('span',{className:'tbl-label'},'Товары на хранении'),
+        h('span',{className:'tbl-label'},data.items.length+' записей')
+      ),
+      h('div',{className:'tbl-wrap'},
+        h('table',null,
+          h('thead',null,h('tr',null,
+            h('th',null,'Договор'),h('th',null,'Клиент'),h('th',null,'Стеллаж / Поз.'),
+            h('th',null,'Вес'),h('th',null,'Срок до'),h('th',null,'Статус')
+          )),
+          h('tbody',null,
+            data.items.length===0
+              ? h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:'48px 20px',color:'var(--text3)'}},
+                  'Товары не добавлены. ',
+                  h('a',{href:'/admin/wb/item/add/',style:{color:'var(--accent)',fontWeight:600}},'Добавить')
+                ))
+              : data.items.map(it=>h('tr',{key:it.id},
+                  h('td',null,h('span',{className:'td-contract'},it.contract)),
+                  h('td',null,it.client),
+                  h('td',null,h('span',{className:'td-rack'},it.rack),' ',h('span',{style:{color:'var(--text3)',fontSize:12}},'· поз. '+it.position)),
+                  h('td',null,it.weight),
+                  h('td',null,it.expires_at),
+                  h('td',null,it.is_expired
+                    ? h('span',{className:'badge badge-ex'},h('span',{className:'badge-dot'}),'Истёк')
+                    : h('span',{className:'badge badge-ok'},h('span',{className:'badge-dot'}),'Активен')
+                  )
+                ))
+          )
+        )
+      )
+    )
+  );
+}
+
+/* ── FOOTER ── */
+function Footer(){
+  return h('footer',{className:'footer'},
+    h('div',{className:'footer-inner'},
+      h('div',null,
+        h('div',{className:'f-brand'},
+          h('div',{className:'logo-mark',style:{width:24,height:24,borderRadius:6}},h(Ico,{paths:ic.layers,size:14,sw:2.5})),
+          'Склад',h('span',null,'Озон')
+        ),
+        h('p',{className:'f-tagline'},'Система учёта склада товаров. Учебный проект.')
+      ),
+      h('div',{className:'f-col'},
+        h('div',{className:'f-col-title'},'Разделы'),
+        h('a',{href:'/admin/wb/room/'},'Помещения'),
+        h('a',{href:'/admin/wb/rack/'},'Стеллажи'),
+        h('a',{href:'/admin/wb/client/'},'Клиенты'),
+        h('a',{href:'/admin/wb/item/'},'Товары')
+      ),
+      h('div',{className:'f-col'},
+        h('div',{className:'f-col-title'},'Система'),
+        h('a',{href:'/admin/'},'Панель Django'),
+        h('a',{href:'/admin/auth/user/'},'Пользователи')
+      ),
+      h('div',{className:'f-col'},
+        h('div',{className:'f-col-title'},'Добавить'),
+        h('a',{href:'/admin/wb/room/add/'},'Помещение'),
+        h('a',{href:'/admin/wb/rack/add/'},'Стеллаж'),
+        h('a',{href:'/admin/wb/client/add/'},'Клиент'),
+        h('a',{href:'/admin/wb/item/add/'},'Товар')
+      )
+    ),
+    h('div',{className:'f-bottom'},
+      h('span',{className:'f-copy'},'© 2024–2026 СкладОзон'),
+      h('div',{className:'f-status'},
+        h('span',{className:'f-status-dot'}),
+        'Учебный проект · Django'
+      )
+    )
+  );
+}
+
+/* ── APP ── */
+function App(){
+  const [data,setData]=useState(null);
+  const [err,setErr]=useState(null);
+
+  useEffect(()=>{
+    fetch('/api/data/')
+      .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      .then(setData)
+      .catch(e=>setErr(e.message));
+  },[]);
+
+  if(err) return h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100dvh',flexDirection:'column',gap:16,color:'var(--text3)',padding:40,textAlign:'center'}},
+    h('div',{className:'empty-icon'},h(Ico,{paths:ic.warn,size:24})),
+    h('p',{style:{fontSize:15,fontWeight:600,color:'var(--text)'}},'Ошибка загрузки данных'),
+    h('p',{style:{fontSize:13}},'Убедитесь, что Django-сервер запущен на ',
+      h('code',{style:{color:'var(--accent)',fontFamily:'var(--mono)',fontSize:12,background:'var(--accent-dim)',padding:'2px 8px',borderRadius:4}},window.location.origin)
+    )
+  );
+
+  const recentContracts=data?.items
+    ?.sort((a,b)=>new Date(b.received.split('.').reverse().join('-'))-new Date(a.received.split('.').reverse().join('-')))
+    .slice(0,4)
+    ||[];
+
+  return h(F,null,
+    h(Nav),
+    h(Hero,{stats:data?.stats,recentContracts}),
+    data ? h(StatsBar,{data}) : h(StatsBarSk),
+    data ? h(MgmtGrid,{data}) : null,
+    data ? h(Rooms,{data}) : null,
+    data ? h(Racks,{data}) : null,
+    data ? h(Clients,{data}) : null,
+    data ? h(ItemsTable,{data}) : null,
+    h(Footer)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>
